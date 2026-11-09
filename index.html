@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KLASSIK DIGITAL BONUSKARTE</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    header {
+      text-align: center;
+      padding: 30px 15px;
+      border-bottom: 1px solid #444;
+    }
+    header h1 {
+      letter-spacing: 4px;
+      margin-bottom: 5px;
+    }
+    header p { color: #aaa; }
+    main {
+      width: min(94%, 480px);
+      margin: 30px auto;
+    }
+    .panel {
+      background: #202020;
+      border: 1px solid #444;
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    input, button {
+      width: 100%;
+      padding: 14px;
+      margin-top: 12px;
+      border-radius: 7px;
+      font-size: 16px;
+    }
+    input {
+      background: #111;
+      color: white;
+      border: 1px solid #555;
+    }
+    button {
+      background: white;
+      color: black;
+      border: 0;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #333;
+      color: white;
+      border: 1px solid #666;
+    }
+    .hidden { display: none; }
+    .muted { color: #aaa; }
+    .center { text-align: center; }
+    #qrcode {
+      background: white;
+      display: inline-block;
+      padding: 12px;
+      margin: 15px auto;
+    }
+    .stamps {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin: 20px 0;
+    }
+    .stamp {
+      border: 1px solid #888;
+      border-radius: 50%;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      color: #aaa;
+      font-size: 20px;
+    }
+    .stamp.done {
+      background: white;
+      color: black;
+    }
+    #reader { margin-top: 15px; }
+    .language {
+      max-width: 120px;
+      margin: 0 auto;
+    }
+    footer {
+      text-align: center;
+      padding: 25px;
+      color: #777;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>KLASSIK</h1>
+  <p>BARBER LOUNGE</p>
+  <p>DIGITAL BONUSKARTE</p>
+  <select class="language" id="language" onchange="changeLanguage()">
+    <option value="de">Deutsch</option>
+    <option value="ar">العربية</option>
+  </select>
+</header>
+
+<main>
+
+  <section class="panel" id="authPanel">
+    <h2 id="welcome">Willkommen</h2>
+    <p class="muted" id="authDescription">
+      Melde dich an oder erstelle dein Kundenkonto.
+    </p>
+
+    <input id="name" placeholder="Name">
+    <input id="email" type="email" placeholder="E-Mail">
+    <input id="password" type="password" placeholder="Passwort">
+
+    <button onclick="register()" id="registerButton">
+      Konto erstellen
+    </button>
+
+    <button class="secondary" onclick="login()" id="loginButton">
+      Anmelden
+    </button>
+
+    <p id="message" class="center muted"></p>
+  </section>
+
+  <section class="panel hidden" id="customerPanel">
+    <h2 id="customerTitle">Meine Bonuskarte</h2>
+    <p id="customerName"></p>
+
+    <div class="center">
+      <h3 id="stampCount">0 / 10</h3>
+      <div class="stamps" id="stamps"></div>
+      <div id="qrcode"></div>
+      <p class="muted" id="qrDescription">
+        Zeige diesen QR-Code deinem Friseur.
+      </p>
+      <h3 id="rewardCount"></h3>
+    </div>
+
+    <button class="secondary" onclick="logout()" id="logoutCustomer">
+      Abmelden
+    </button>
+  </section>
+
+  <section class="panel hidden" id="staffPanel">
+    <h2>KLASSIK – Mitarbeiterbereich</h2>
+    <p class="muted">QR-Code des Kunden scannen</p>
+
+    <div id="reader"></div>
+    <p id="scanMessage" class="center"></p>
+
+    <button class="secondary" onclick="logout()">
+      Abmelden
+    </button>
+  </section>
+
+</main>
+
+<footer>
+  KLASSIK BARBER LOUNGE · Osnabrück
+</footer>
+
+<script>
+  // 1. Supabase configuration
+  const SUPABASE_URL = "https://urujsookuwhkrogthute.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_oSXa4Mmd4CDxtoBJGnHINg_sh5waoAv";
+
+  const db = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+  );
+
+  let scanner = null;
+
+  // 2. Language
+  function changeLanguage() {
+    const ar = document.getElementById("language").value === "ar";
+    document.documentElement.lang = ar ? "ar" : "de";
+    document.documentElement.dir = ar ? "rtl" : "ltr";
+
+    document.getElementById("welcome").textContent =
+      ar ? "أهلاً بك في KLASSIK" : "Willkommen";
+
+    document.getElementById("authDescription").textContent =
+      ar ? "سجّل الدخول أو أنشئ حساب زبون جديد." :
+      "Melde dich an oder erstelle dein Kundenkonto.";
+
+    document.getElementById("name").placeholder =
+      ar ? "الاسم" : "Name";
+
+    document.getElementById("email").placeholder =
+      ar ? "البريد الإلكتروني" : "E-Mail";
+
+    document.getElementById("password").placeholder =
+      ar ? "كلمة المرور" : "Passwort";
+
+    document.getElementById("registerButton").textContent =
+      ar ? "إنشاء حساب" : "Konto erstellen";
+
+    document.getElementById("loginButton").textContent =
+      ar ? "تسجيل الدخول" : "Anmelden";
+
+    document.getElementById("customerTitle").textContent =
+      ar ? "بطاقة المكافآت الخاصة بي" : "Meine Bonuskarte";
+
+    document.getElementById("qrDescription").textContent =
+      ar ? "أظهر هذا الرمز للحلاق." :
+      "Zeige diesen QR-Code deinem Friseur.";
+  }
+
+  // 3. Register customer
+  async function register() {
+    const name = document.getElementById("name").value.trim();
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    if (!name || !email || password.length < 8) {
+      return showMessage("Bitte alle Felder ausfüllen. Passwort mindestens 8 Zeichen.");
+    }
+
+    const { error } = await db.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: name }
+      }
+    });
+
+    if (error) return showMessage(error.message);
+
+    showMessage("Registrierung erfolgreich. Bitte prüfe deine E-Mails zur Bestätigung.");
+  }
+
+  // 4. Login
+  async function login() {
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    const { error } = await db.auth.signInWithPassword({
+      email, password
+    });
+
+    if (error) return showMessage(error.message);
+
+    await loadAccount();
+  }
+
+  // 5. Load account
+  async function loadAccount() {
+    const { data: { user } } = await db.auth.getUser();
+    if (!user) return;
+
+    const { data: profile, error } = await db
+      .from("profiles")
+      .select("full_name, role")
+      .eq("id", user.id)
+      .single();
+
+    if (error) return showMessage(error.message);
+
+    document.getElementById("authPanel").classList.add("hidden");
+
+    if (profile.role === "admin" || profile.role === "employee") {
+      document.getElementById("staffPanel").classList.remove("hidden");
+      startScanner();
+    } else {
+      document.getElementById("customerPanel").classList.remove("hidden");
+      await loadCustomer(user.id, profile.full_name);
+    }
+  }
+
+  // 6. Customer loyalty card
+  async function loadCustomer(userId, name) {
+    const { data: card, error } = await db
+      .from("loyalty_cards")
+      .select("stamps, free_haircuts_available, qr_token")
+      .eq("customer_id", userId)
+      .single();
+
+    if (error) return showMessage(error.message);
+
+    document.getElementById("customerName").textContent = name;
+    document.getElementById("stampCount").textContent =
+      card.stamps + " / 10";
+
+    document.getElementById("rewardCount").textContent =
+      "Free haircuts: " + card.free_haircuts_available;
+
+    const stamps = document.getElementById("stamps");
+    stamps.innerHTML = "";
+
+    for (let i = 1; i <= 10; i++) {
+      const el = document.createElement("div");
+      el.className = "stamp" + (i <= card.stamps ? " done" : "");
+      el.textContent = i <= card.stamps ? "✓" : i;
+      stamps.appendChild(el);
+    }
+
+    document.getElementById("qrcode").innerHTML = "";
+
+    new QRCode(document.getElementById("qrcode"), {
+      text: card.qr_token,
+      width: 180,
+      height: 180
+    });
+  }
+
+  // 7. Employee scanner
+  async function startScanner() {
+    scanner = new Html5Qrcode("reader");
+
+    try {
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        async (decodedText) => {
+          await scanner.stop();
+
+          const { data, error } = await db.rpc("award_stamp", {
+            p_qr_token: decodedText
+          });
+
+          if (error) {
+            document.getElementById("scanMessage").textContent =
+              "Fehler: " + error.message;
+          } else {
+            const result = data[0];
+            document.getElementById("scanMessage").textContent =
+              result.reward_earned
+              ? "10 Stempel erreicht! Kostenlose Haarschnitt-Belohnung verdient!"
+              : "Stempel hinzugefügt! Neuer Stand: " +
+                result.current_stamps + " / 10";
+          }
+        }
+      );
+    } catch (error) {
+      document.getElementById("scanMessage").textContent =
+        "Kamera konnte nicht gestartet werden: " + error;
+    }
+  }
+
+  // 8. Logout
+  async function logout() {
+    if (scanner) {
+      try { await scanner.stop(); } catch(e) {}
+    }
+
+    await db.auth.signOut();
+    location.reload();
+  }
+
+  function showMessage(message) {
+    document.getElementById("message").textContent = message;
+  }
+
+  // 9. Restore existing session
+  db.auth.getSession().then(({ data }) => {
+    if (data.session) loadAccount();
+  });
+</script>
+
+</body>
+</html>
